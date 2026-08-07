@@ -219,11 +219,12 @@ jobs:
 
                   matched.append(r)
 
-              # 按 TLS 延迟从低到高排序
-              matched.sort(key=lambda x: x["tls_delay"])
+              # 按速度从大到小（降序）排序；如果速度相同，则按 TLS 延迟从低到高排序
+              matched.sort(key=lambda x: (-x["speed"], x["tls_delay"]))
               return matched
 
-          def push_to_cloudflare(domain, ip_list):
+          def push_to_cloudflare(domain, ip_list, max_push=10):
+              """推送 IP 到 Cloudflare，最多推送 max_push 个大带宽 IP"""
               zone_id = os.environ.get("CF_ZONE_ID")
               api_token = os.environ.get("CF_API_TOKEN")
 
@@ -234,6 +235,9 @@ jobs:
               if not ip_list:
                   print(f"[跳过 CF 更新] {domain} 无有效 IP，禁止提交空数据")
                   return
+
+              # 限制最大推送数量为 10 个（取速度最大的前 10 个 IP）
+              push_ips = ip_list[:max_push]
 
               headers = {
                   "Authorization": f"Bearer {api_token}",
@@ -257,7 +261,7 @@ jobs:
 
                   # 3. 批量创建新的 A 记录 (仅 DNS 解析，不开启小黄云代理)
                   create_url = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records"
-                  for ip in ip_list:
+                  for ip in push_ips:
                       payload = {
                           "type": "A",
                           "name": domain,
@@ -269,7 +273,7 @@ jobs:
                       with urllib.request.urlopen(cr_req):
                           pass
 
-                  print(f"成功为 {domain} 更新了 {len(ip_list)} 条 A 记录解析")
+                  print(f"成功为 {domain} 更新了 {len(push_ips)} 条 A 记录解析（选自前 {len(ip_list)} 个节点）")
 
               except Exception as e:
                   print(f"[错误] Cloudflare API 更新失败 ({domain}): {e}")
@@ -291,12 +295,14 @@ jobs:
                       print(f"[警告] 分组 {group_key} 当前无符合条件的 IP，跳过该分组")
                       continue
 
+                  # 写入 TXT（此时 ip_list 已经是按速度从大到小排列）
                   with open(file_path, "w", encoding="utf-8") as f:
                       f.write("\n".join(ip_list) + "\n")
-                  print(f"分组 [{group_key}] 成功写入 {len(ip_list)} 个 IP 到 {file_path}")
+                  print(f"分组 [{group_key}] 成功写入 {len(ip_list)} 个 IP 到 {file_path}（按速度从大到小排列）")
 
+                  # 推送 Cloudflare（限定最多 10 个速度最大的 IP）
                   if domain:
-                      push_to_cloudflare(domain, ip_list)
+                      push_to_cloudflare(domain, ip_list, max_push=10)
 
                   updated_count += 1
 
@@ -314,4 +320,4 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]"
           git add *.txt
-          git diff --staged --quiet || (git commit -m "auto: update filtered Cloudflare IPs" && git push)
+          git diff --staged --quiet || (git commit -m "auto: update filtered Cloudflare IPs sorted by speed" && git push)
