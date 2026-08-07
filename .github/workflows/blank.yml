@@ -112,7 +112,7 @@ jobs:
               },
               "FR": {
                   "country": "FR",
-                  "airports": ["AMS", "BRU", "CDG", "FRA", "MRS"],
+                  "airports": ["CDG"],
                   "file": "FR.txt",
                   "domain": "fr.bestcf.eu.cc",
                   "ports": ["443"],
@@ -121,7 +121,7 @@ jobs:
               },
               "GB": {
                   "country": "GB",
-                  "airports": ["FRA", "LHR", "MAN"],
+                  "airports": ["LHR"],
                   "file": "GB.txt",
                   "domain": "gb.bestcf.eu.cc",
                   "ports": ["443"],
@@ -130,9 +130,18 @@ jobs:
               },
               "FI": {
                   "country": "FI",
-                  "airports": ["AMS", "ARN", "HEL", "MXP", "TLL"],
+                  "airports": ["ARN", "HEL", "TLL"],
                   "file": "FI.txt",
                   "domain": "fi.bestcf.eu.cc",
+                  "ports": ["443"],
+                  "min_speed": 2.00,
+                  "require_meta_match": True
+              },
+              "PL": {
+                  "country": "PL",
+                  "airports": ["WAW"],
+                  "file": "PL.txt",
+                  "domain": "pl.bestcf.eu.cc",
                   "ports": ["443"],
                   "min_speed": 2.00,
                   "require_meta_match": True
