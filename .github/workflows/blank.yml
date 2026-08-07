@@ -44,7 +44,7 @@ jobs:
                   "file": "US.txt",
                   "domain": "us.bestcf.eu.cc",
                   "ports": ["443"],
-                  "min_speed": 5.00,
+                  "min_speed": 3.00,
                   "require_meta_match": True
               },
               "JP": {
