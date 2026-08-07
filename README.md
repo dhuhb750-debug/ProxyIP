@@ -27,7 +27,9 @@ ProxyIP Top10, 早中晚更新, Thanks xgonce!
 拉脱维亚 lv.bestcf.eu.cc
 
 加拿大 ca.bestcf.eu.cc
+
 --------------------------------------
+
 如何使用自己的域名？
 
 Settings -> Secrets and variables -> Actions -> Repository secrets 添加以下两个 Key：
