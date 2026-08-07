@@ -60,9 +60,16 @@ jobs:
           def fetch_filtered_data():
               req = urllib.request.Request(CSV_URL, headers={'User-Agent': 'Mozilla/5.0'})
               with urllib.request.urlopen(req) as resp:
-                  lines = [line.decode('utf-8', errors='ignore') for line in resp.readlines()]
+                  # 使用 utf-8-sig 自动剥离 UTF-8 BOM 头
+                  content = resp.read().decode('utf-8-sig', errors='ignore')
 
+              lines = content.splitlines()
               reader = csv.DictReader(lines)
+              
+              # 清理表头字段名字的空格
+              if reader.fieldnames:
+                  reader.fieldnames = [f.strip() for f in reader.fieldnames if f]
+
               valid_rows = []
 
               for row in reader:
@@ -74,12 +81,15 @@ jobs:
                   datacenter = row.get("机房", "").strip()
                   tls_delay_str = row.get("TLS延迟(ms)", "999999").strip()
 
+                  # 条件 1: IP 与 cf-meta-ip 相同且为 IPv4
                   if not ip or ip != cf_meta_ip or not is_ipv4(ip):
                       continue
 
+                  # 条件 2: 端口为 443
                   if port != "443":
                       continue
 
+                  # 条件 3: 速度必须大于 5.00 Mbps
                   try:
                       speed = float(speed_str)
                   except ValueError:
