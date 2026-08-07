@@ -1,4 +1,4 @@
-ProxyIP Top10, Thanks xgonce!
+ProxyIP Top10, 早中晚更新0, Thanks xgonce!
 
 美利坚 us.bestcf.eu.cc
 
