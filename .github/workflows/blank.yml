@@ -145,6 +145,15 @@ jobs:
                   "ports": ["443"],
                   "min_speed": 2.00,
                   "require_meta_match": True
+              },
+              "LV": {
+                  "country": "LV",
+                  "airports": ["ARN", "RIX", "VNO"],
+                  "file": "LV.txt",
+                  "domain": "lv.bestcf.eu.cc",
+                  "ports": ["443"],
+                  "min_speed": 2.00,
+                  "require_meta_match": True
               }
           }
 
