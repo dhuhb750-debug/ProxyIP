@@ -60,13 +60,11 @@ jobs:
           def fetch_filtered_data():
               req = urllib.request.Request(CSV_URL, headers={'User-Agent': 'Mozilla/5.0'})
               with urllib.request.urlopen(req) as resp:
-                  # 使用 utf-8-sig 自动剥离 UTF-8 BOM 头
                   content = resp.read().decode('utf-8-sig', errors='ignore')
 
               lines = content.splitlines()
               reader = csv.DictReader(lines)
               
-              # 清理表头字段名字的空格
               if reader.fieldnames:
                   reader.fieldnames = [f.strip() for f in reader.fieldnames if f]
 
@@ -81,15 +79,12 @@ jobs:
                   datacenter = row.get("机房", "").strip()
                   tls_delay_str = row.get("TLS延迟(ms)", "999999").strip()
 
-                  # 条件 1: IP 与 cf-meta-ip 相同且为 IPv4
                   if not ip or ip != cf_meta_ip or not is_ipv4(ip):
                       continue
 
-                  # 条件 2: 端口为 443
                   if port != "443":
                       continue
 
-                  # 条件 3: 速度必须大于 5.00 Mbps
                   try:
                       speed = float(speed_str)
                   except ValueError:
@@ -115,10 +110,12 @@ jobs:
               api_token = os.environ.get("CF_API_TOKEN")
 
               if not zone_id or not api_token:
-                  raise ValueError(f"推送终止: 缺失 CF_ZONE_ID 或 CF_API_TOKEN 环境变量")
+                  print(f"[跳过 CF 更新] 缺失 CF_ZONE_ID 或 CF_API_TOKEN 环境变量 ({domain})")
+                  return
 
               if not ip_list:
-                  raise ValueError(f"推送终止: {domain} 未提取到任何有效 IP，禁止提交空数据")
+                  print(f"[跳过 CF 更新] {domain} 无有效 IP，禁止提交空数据")
+                  return
 
               content = "\n".join(ip_list)
               headers = {
@@ -145,19 +142,20 @@ jobs:
                           update_url = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records/{record_id}"
                           up_req = urllib.request.Request(update_url, data=json.dumps(payload).encode('utf-8'), headers=headers, method="PUT")
                           with urllib.request.urlopen(up_req):
-                              print(f"成功更新 DNS TXT 记录: {domain}")
+                              print(f"成功更新 Cloudflare DNS TXT 记录: {domain}")
                       else:
                           create_url = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records"
                           cr_req = urllib.request.Request(create_url, data=json.dumps(payload).encode('utf-8'), headers=headers, method="POST")
                           with urllib.request.urlopen(cr_req):
-                              print(f"成功创建 DNS TXT 记录: {domain}")
+                              print(f"成功创建 Cloudflare DNS TXT 记录: {domain}")
               except Exception as e:
-                  print(f"Cloudflare API 更新失败 ({domain}): {e}")
-                  raise
+                  print(f"[错误] Cloudflare API 更新失败 ({domain}): {e}")
 
           def main():
               rows = fetch_filtered_data()
               print(f"筛选到 {len(rows)} 条符合基础要求的节点")
+
+              updated_count = 0
 
               for group_key, group_cfg in GROUPS.items():
                   country = group_cfg["country"]
@@ -171,7 +169,8 @@ jobs:
                   ip_list = [r["ip"] for r in matched]
 
                   if not ip_list:
-                      raise ValueError(f"分组 {group_key} ({country}-{airports}) 未找到符合条件的 IP")
+                      print(f"[警告] 分组 {group_key} ({country}-{airports}) 当前无符合条件的 IP，跳过该分组")
+                      continue
 
                   with open(file_path, "w", encoding="utf-8") as f:
                       f.write("\n".join(ip_list) + "\n")
@@ -179,6 +178,11 @@ jobs:
 
                   if domain:
                       push_to_cloudflare(domain, ip_list)
+
+                  updated_count += 1
+
+              if updated_count == 0:
+                  raise ValueError("所有分组均未提取到有效 IP，无法完成更新")
 
           if __name__ == "__main__":
               main()
