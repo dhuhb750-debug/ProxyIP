@@ -1,0 +1,217 @@
+# This is a basic workflow to help you get started with Actions
+name: Fetch Cloudflare IPs & Update DNS
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # 每 6 小时自动运行一次
+  workflow_dispatch:        # 支持手动触发
+
+permissions:
+  contents: write
+
+jobs:
+  process-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Process CSV and Update Cloudflare DNS
+        env:
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: |
+          python - << 'EOF'
+          import csv
+          import json
+          import os
+          import urllib.request
+
+          CSV_URL = "https://raw.githubusercontent.com/xgonce/Cloudflare_IP/refs/heads/main/result.csv"
+
+          GROUPS = {
+              "US": {
+                  "country": "US",
+                  "airports": ["SJC", "LAX"],
+                  "file": "US.txt",
+                  "domain": "us.bestcf.eu.cc"
+              },
+              "JP": {
+                  "country": "JP",
+                  "airports": ["NRT"],
+                  "file": "JP.txt",
+                  "domain": "jp.bestcf.eu.cc"
+              },
+              "HK": {
+                  "country": "HK",
+                  "airports": ["HKG"],
+                  "file": "HK.txt",
+                  "domain": "hk.bestcf.eu.cc"
+              }
+          }
+
+          def is_ipv4(ip_str):
+              return ":" not in ip_str and ip_str.count(".") == 3
+
+          def fetch_filtered_data():
+              req = urllib.request.Request(CSV_URL, headers={'User-Agent': 'Mozilla/5.0'})
+              with urllib.request.urlopen(req) as resp:
+                  lines = [line.decode('utf-8', errors='ignore') for line in resp.readlines()]
+
+              reader = csv.DictReader(lines)
+              valid_rows = []
+
+              for row in reader:
+                  ip = row.get("IP", "").strip()
+                  cf_meta_ip = row.get("cf-meta-ip", "").strip()
+                  port = row.get("端口", "").strip()
+                  speed_str = row.get("速度(Mbps)", "0").strip()
+                  country = row.get("CF归属国", "").strip()
+                  datacenter = row.get("机房", "").strip()
+                  tls_delay_str = row.get("TLS延迟(ms)", "999999").strip()
+
+                  if not ip or ip != cf_meta_ip or not is_ipv4(ip):
+                      continue
+
+                  if port != "443":
+                      continue
+
+                  try:
+                      speed = float(speed_str)
+                  except ValueError:
+                      speed = 0.0
+                  if speed <= 5.00:
+                      continue
+
+                  try:
+                      tls_delay = float(tls_delay_str)
+                  except ValueError:
+                      tls_delay = 999999.0
+
+                  valid_rows.append({
+                      "ip": ip,
+                      "country": country,
+                      "datacenter": datacenter,
+                      "tls_delay": tls_delay
+                  })
+              return valid_rows
+
+          def push_to_cloudflare(domain, ip_list):
+              zone_id = os.environ.get("CF_ZONE_ID")
+              api_token = os.environ.get("CF_API_TOKEN")
+
+              if not zone_id or not api_token:
+                  raise ValueError(f"推送终止: 缺失 CF_ZONE_ID 或 CF_API_TOKEN 环境变量")
+
+              if not ip_list:
+                  raise ValueError(f"推送终止: {domain} 未提取到任何有效 IP，禁止提交空数据")
+
+              content = "\n".join(ip_list)
+              headers = {
+                  "Authorization": f"Bearer {api_token}",
+                  "Content-Type": "application/json"
+              }
+
+              url = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records?name={domain}&type=TXT"
+              try:
+                  req = urllib.request.Request(url, headers=headers)
+                  with urllib.request.urlopen(req) as response:
+                      res_data = json.loads(response.read().decode('utf-8'))
+                      records = res_data.get("result", [])
+
+                      payload = {
+                          "type": "TXT",
+                          "name": domain,
+                          "content": content,
+                          "ttl": 60
+                      }
+
+                      if records:
+                          record_id = records[0]["id"]
+                          update_url = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records/{record_id}"
+                          up_req = urllib.request.Request(update_url, data=json.dumps(payload).encode('utf-8'), headers=headers, method="PUT")
+                          with urllib.request.urlopen(up_req):
+                              print(f"成功更新 DNS TXT 记录: {domain}")
+                      else:
+                          create_url = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records"
+                          cr_req = urllib.request.Request(create_url, data=json.dumps(payload).encode('utf-8'), headers=headers, method="POST")
+                          with urllib.request.urlopen(cr_req):
+                              print(f"成功创建 DNS TXT 记录: {domain}")
+              except Exception as e:
+                  print(f"Cloudflare API 更新失败 ({domain}): {e}")
+                  raise
+
+          def main():
+              rows = fetch_filtered_data()
+              print(f"筛选到 {len(rows)} 条符合基础要求的节点")
+
+              for group_key, group_cfg in GROUPS.items():
+                  country = group_cfg["country"]
+                  airports = group_cfg["airports"]
+                  file_path = group_cfg["file"]
+                  domain = group_cfg["domain"]
+
+                  matched = [r for r in rows if r["country"] == country and r["datacenter"] in airports]
+                  matched.sort(key=lambda x: x["tls_delay"])
+
+                  ip_list = [r["ip"] for r in matched]
+
+                  if not ip_list:
+                      raise ValueError(f"分组 {group_key} ({country}-{airports}) 未找到符合条件的 IP")
+
+                  with open(file_path, "w", encoding="utf-8") as f:
+                      f.write("\n".join(ip_list) + "\n")
+                  print(f"成功写入 {len(ip_list)} 个 IP 到 {file_path}")
+
+                  if domain:
+                      push_to_cloudflare(domain, ip_list)
+
+          if __name__ == "__main__":
+              main()
+          EOF
+
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add US.txt JP.txt HK.txt
+          git diff --staged --quiet || (git commit -m "auto: update filtered Cloudflare IPs" && git push)
+name: CI
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the "main" branch
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+
+      # Runs a single command using the runners shell
+      - name: Run a one-line script
+        run: echo Hello, world!
+
+      # Runs a set of commands using the runners shell
+      - name: Run a multi-line script
+        run: |
+          echo Add other actions to build,
+          echo test, and deploy your project.
