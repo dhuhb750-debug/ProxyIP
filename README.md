@@ -1,4 +1,4 @@
-ProxyIP Top10
+ProxyIP Top10, Thanks xgonce!
 
 us.bestcf.eu.cc
 
@@ -21,5 +21,3 @@ fr.bestcf.eu.cc
 gb.bestcf.eu.cc
 
 fi.bestcf.eu.cc
-
-Thanks xgonce
