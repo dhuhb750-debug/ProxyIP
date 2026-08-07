@@ -154,6 +154,15 @@ jobs:
                   "ports": ["443"],
                   "min_speed": 2.00,
                   "require_meta_match": True
+              },
+              "CA": {
+                  "country": "CA",
+                  "airports": ["ORD", "YYZ"],
+                  "file": "CA.txt",
+                  "domain": "ca.bestcf.eu.cc",
+                  "ports": ["443"],
+                  "min_speed": 2.00,
+                  "require_meta_match": True
               }
           }
 
