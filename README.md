@@ -1,26 +1,26 @@
 ProxyIP Top10, Thanks xgonce!
 
-us.bestcf.eu.cc
+美利坚 us.bestcf.eu.cc
 
-jp.bestcf.eu.cc
+小日子 jp.bestcf.eu.cc
 
-hk.bestcf.eu.cc
+德国 de.bestcf.eu.cc
 
-de.bestcf.eu.cc
+荷兰 nl.bestcf.eu.cc
 
-tw.bestcf.eu.cc
+中国香港 hk.bestcf.eu.cc
 
-kr.bestcf.eu.cc
+中国台湾 tw.bestcf.eu.cc
 
-nl.bestcf.eu.cc
+韩国 kr.bestcf.eu.cc
 
-sg.bestcf.eu.cc
+新加坡 sg.bestcf.eu.cc
 
-fr.bestcf.eu.cc
+法国 fr.bestcf.eu.cc
 
-gb.bestcf.eu.cc
+英国 gb.bestcf.eu.cc
 
-fi.bestcf.eu.cc
+芬兰 fi.bestcf.eu.cc
 
 --------------------------------------
 如何使用自己的域名？
