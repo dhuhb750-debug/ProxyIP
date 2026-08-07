@@ -22,6 +22,8 @@ ProxyIP Top10, 早中晚更新, Thanks xgonce!
 
 芬兰 fi.bestcf.eu.cc
 
+波兰 pl.bestcf.eu.cc
+
 --------------------------------------
 如何使用自己的域名？
 
