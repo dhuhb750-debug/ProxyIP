@@ -1,4 +1,4 @@
-name: Fetch Cloudflare IPs & Update DNS
+name: PROXYIP
 
 on:
   schedule:
@@ -33,31 +33,117 @@ jobs:
 
           CSV_URL = "https://raw.githubusercontent.com/xgonce/Cloudflare_IP/refs/heads/main/result.csv"
 
+          # 每个分组均可独立配置筛选规则：
+          # - ports: 允许的端口列表 (默认 ["443"])
+          # - min_speed: 最低速度要求 Mbps (默认 5.00)
+          # - require_meta_match: 是否要求 IP == cf-meta-ip (默认 True)
           GROUPS = {
               "US": {
                   "country": "US",
                   "airports": ["SJC", "LAX"],
                   "file": "US.txt",
-                  "domain": "us.bestcf.eu.cc"
+                  "domain": "us.bestcf.eu.cc",
+                  "ports": ["443"],
+                  "min_speed": 5.00,
+                  "require_meta_match": True
               },
               "JP": {
                   "country": "JP",
                   "airports": ["NRT"],
                   "file": "JP.txt",
-                  "domain": "jp.bestcf.eu.cc"
+                  "domain": "jp.bestcf.eu.cc",
+                  "ports": ["443"],
+                  "min_speed": 3.00,
+                  "require_meta_match": True
               },
               "HK": {
                   "country": "HK",
                   "airports": ["HKG"],
                   "file": "HK.txt",
-                  "domain": "hk.bestcf.eu.cc"
+                  "domain": "hk.bestcf.eu.cc",
+                  "ports": ["443"],
+                  "min_speed": 2.00,
+                  "require_meta_match": True
+              },
+              "DE": {
+                  "country": "DE",
+                  "airports": ["FRA"],
+                  "file": "DE.txt",
+                  "domain": "de.bestcf.eu.cc",
+                  "ports": ["443"],
+                  "min_speed": 3.00,
+                  "require_meta_match": True
+              },
+              "TW": {
+                  "country": "TW",
+                  "airports": ["TPE"],
+                  "file": "TW.txt",
+                  "domain": "tw.bestcf.eu.cc",
+                  "ports": ["443"],
+                  "min_speed": 2.00,
+                  "require_meta_match": True
+              },
+              "KR": {
+                  "country": "KR",
+                  "airports": ["ICN"],
+                  "file": "KR.txt",
+                  "domain": "kr.bestcf.eu.cc",
+                  "ports": ["443"],
+                  "min_speed": 2.00,
+                  "require_meta_match": True
+              },
+              "NL": {
+                  "country": "NL",
+                  "airports": ["AMS"],
+                  "file": "NL.txt",
+                  "domain": "nl.bestcf.eu.cc",
+                  "ports": ["443"],
+                  "min_speed": 3.00,
+                  "require_meta_match": True
+              },
+              "SG": {
+                  "country": "SG",
+                  "airports": ["SIN"],
+                  "file": "SG.txt",
+                  "domain": "sg.bestcf.eu.cc",
+                  "ports": ["443"],
+                  "min_speed": 2.00,
+                  "require_meta_match": True
+              },
+              "FR": {
+                  "country": "FR",
+                  "airports": ["AMS", "BRU", "CDG", "FRA", "MRS"],
+                  "file": "FR.txt",
+                  "domain": "fr.bestcf.eu.cc",
+                  "ports": ["443"],
+                  "min_speed": 2.00,
+                  "require_meta_match": True
+              },
+              "GB": {
+                  "country": "GB",
+                  "airports": ["FRA", "LHR", "MAN"],
+                  "file": "GB.txt",
+                  "domain": "gb.bestcf.eu.cc",
+                  "ports": ["443"],
+                  "min_speed": 2.00,
+                  "require_meta_match": True
+              },
+              "FI": {
+                  "country": "FI",
+                  "airports": ["AMS", "ARN", "HEL", "MXP", "TLL"],
+                  "file": "FI.txt",
+                  "domain": "fi.bestcf.eu.cc",
+                  "ports": ["443"],
+                  "min_speed": 2.00,
+                  "require_meta_match": True
               }
           }
 
           def is_ipv4(ip_str):
               return ":" not in ip_str and ip_str.count(".") == 3
 
-          def fetch_filtered_data():
+          def fetch_raw_csv_data():
+              """下载并解析原始 CSV 数据，转为格式化的字典列表"""
               req = urllib.request.Request(CSV_URL, headers={'User-Agent': 'Mozilla/5.0'})
               with urllib.request.urlopen(req) as resp:
                   content = resp.read().decode('utf-8-sig', errors='ignore')
@@ -68,8 +154,7 @@ jobs:
               if reader.fieldnames:
                   reader.fieldnames = [f.strip() for f in reader.fieldnames if f]
 
-              valid_rows = []
-
+              rows = []
               for row in reader:
                   ip = row.get("IP", "").strip()
                   cf_meta_ip = row.get("cf-meta-ip", "").strip()
@@ -79,34 +164,64 @@ jobs:
                   datacenter = row.get("机房", "").strip()
                   tls_delay_str = row.get("TLS延迟(ms)", "999999").strip()
 
-                  # 条件 1: IP 与 cf-meta-ip 相同且为 IPv4
-                  if not ip or ip != cf_meta_ip or not is_ipv4(ip):
-                      continue
-
-                  # 条件 2: 端口为 443
-                  if port != "443":
-                      continue
-
-                  # 条件 3: 速度必须大于 5.00 Mbps
                   try:
                       speed = float(speed_str)
                   except ValueError:
                       speed = 0.0
-                  if speed <= 5.00:
-                      continue
 
                   try:
                       tls_delay = float(tls_delay_str)
                   except ValueError:
                       tls_delay = 999999.0
 
-                  valid_rows.append({
+                  rows.append({
                       "ip": ip,
+                      "cf_meta_ip": cf_meta_ip,
+                      "port": port,
+                      "speed": speed,
                       "country": country,
                       "datacenter": datacenter,
                       "tls_delay": tls_delay
                   })
-              return valid_rows
+              return rows
+
+          def filter_rows_for_group(all_rows, group_cfg):
+              """根据分组配置中的独立规则筛选数据"""
+              country = group_cfg["country"]
+              airports = group_cfg["airports"]
+              ports = group_cfg.get("ports", ["443"])
+              min_speed = group_cfg.get("min_speed", 5.00)
+              require_meta_match = group_cfg.get("require_meta_match", True)
+
+              matched = []
+              for r in all_rows:
+                  ip = r["ip"]
+
+                  # 基础语法校验：必须是 IPv4
+                  if not ip or not is_ipv4(ip):
+                      continue
+
+                  # 校验 1: 国家与机房
+                  if r["country"] != country or r["datacenter"] not in airports:
+                      continue
+
+                  # 校验 2: IP 与 cf-meta-ip 是否匹配
+                  if require_meta_match and ip != r["cf_meta_ip"]:
+                      continue
+
+                  # 校验 3: 端口号
+                  if r["port"] not in ports:
+                      continue
+
+                  # 校验 4: 最低速度要求
+                  if r["speed"] <= min_speed:
+                      continue
+
+                  matched.append(r)
+
+              # 按 TLS 延迟从低到高排序
+              matched.sort(key=lambda x: x["tls_delay"])
+              return matched
 
           def push_to_cloudflare(domain, ip_list):
               zone_id = os.environ.get("CF_ZONE_ID")
@@ -160,29 +275,25 @@ jobs:
                   print(f"[错误] Cloudflare API 更新失败 ({domain}): {e}")
 
           def main():
-              rows = fetch_filtered_data()
-              print(f"筛选到 {len(rows)} 条符合基础要求的节点")
+              all_rows = fetch_raw_csv_data()
+              print(f"已获取原始节点数据：{len(all_rows)} 条")
 
               updated_count = 0
 
               for group_key, group_cfg in GROUPS.items():
-                  country = group_cfg["country"]
-                  airports = group_cfg["airports"]
                   file_path = group_cfg["file"]
-                  domain = group_cfg["domain"]
+                  domain = group_cfg.get("domain")
 
-                  matched = [r for r in rows if r["country"] == country and r["datacenter"] in airports]
-                  matched.sort(key=lambda x: x["tls_delay"])
-
+                  matched = filter_rows_for_group(all_rows, group_cfg)
                   ip_list = [r["ip"] for r in matched]
 
                   if not ip_list:
-                      print(f"[警告] 分组 {group_key} ({country}-{airports}) 当前无符合条件的 IP，跳过该分组")
+                      print(f"[警告] 分组 {group_key} 当前无符合条件的 IP，跳过该分组")
                       continue
 
                   with open(file_path, "w", encoding="utf-8") as f:
                       f.write("\n".join(ip_list) + "\n")
-                  print(f"成功写入 {len(ip_list)} 个 IP 到 {file_path}")
+                  print(f"分组 [{group_key}] 成功写入 {len(ip_list)} 个 IP 到 {file_path}")
 
                   if domain:
                       push_to_cloudflare(domain, ip_list)
@@ -201,6 +312,6 @@ jobs:
       - name: Commit and Push Changes
         run: |
           git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.email "github-actions[bot]"
           git add *.txt
           git diff --staged --quiet || (git commit -m "auto: update filtered Cloudflare IPs" && git push)
