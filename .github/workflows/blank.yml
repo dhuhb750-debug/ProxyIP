@@ -107,7 +107,7 @@ jobs:
                   "file": "SG.txt",
                   "domain": "sg.bestcf.eu.cc",
                   "ports": ["443"],
-                  "min_speed": 1.20,
+                  "min_speed": 1.50,
                   "require_meta_match": True
               },
               "FR": {
